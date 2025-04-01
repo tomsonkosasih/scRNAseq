@@ -1,0 +1,45 @@
+#converting Gene ENSMBL ID to Gene Symbol in Python
+
+import requests
+import scanpy as sc
+from ipywidgets import IntProgress #to display progress bar
+from IPython.display import display #to display progress bar
+
+def get_gene_symbol(ensembl_id, session):
+    """Fetch gene symbol for a given Ensembl ID using the Ensembl REST API."""
+    url = f"https://rest.ensembl.org/lookup/id/{ensembl_id}"
+    headers = {"Content-Type": "application/json"}
+    response = session.get(url, headers=headers)
+
+    if response.status_code == 200:
+        data = response.json()
+        return data.get("display_name", ensembl_id)  # Return original ID if symbol not found
+    else:
+        return ensembl_id  # Return original ID if not found
+
+def convert_ensembl_to_symbol(adata):
+    """Convert Ensembl IDs in adata.var_names to gene symbols with a progress bar."""
+    session = requests.Session()  # Persistent session for efficiency
+    ensembl_ids = adata.var_names
+
+    # Initialize progress bar
+    max_count = len(ensembl_ids)
+    progress_bar = IntProgress(min=0, max=max_count)  
+    display(progress_bar)
+
+    gene_symbols = []
+    for i, ensembl_id in enumerate(ensembl_ids):
+        gene_symbols.append(get_gene_symbol(ensembl_id, session))
+        progress_bar.value = i + 1  # Update progress bar
+
+    # Store gene symbols and update var_names
+    adata.var["gene_symbol"] = gene_symbols
+    adata.var_names = adata.var["gene_symbol"]
+
+    return adata
+
+# Example usage
+adata = sc.read_csv('GSM5277189_PP-30696.csv.gz').T  # Load your dataset
+adata = convert_ensembl_to_symbol(adata)
+
+print(adata.var.head())  # Verify conversion
