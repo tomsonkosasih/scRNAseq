@@ -36,4 +36,4 @@ adata.write_h5ad('All.h5ad')
 adata.obs.groupby('Sample').value_counts() #Check the cell nunmber per sample
 adata.obs.groupby('Sample')['n_genes_by_counts'].mean() check the number of genes
 adata.obs.groupby('Sample')['total_counts'].mean() # check the number of UMI (transcripts)
-adata.obs.groupby('Sample')['pct_mt'].mean() #check the percent of mitochondria
+adata.obs.groupby('Sample')['pct_counts_mt'].mean() #check the percent of mitochondria
