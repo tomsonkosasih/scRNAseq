@@ -1,0 +1,3 @@
+adata = sc.read_csv('PP_31449.csv')  # This should be pure numeric
+adata.obs['Sample'] = 'Sample_Index'  # Add sample info here
+adata.write('Sample_Index.h5ad')
