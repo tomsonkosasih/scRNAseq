@@ -1,1 +1,34 @@
+os.listdir('GeneAnnotated/') #put all dataset to be appended in a dedicated directory
+
+#defining adata including the filtration parameters (>500 transcripts, >100 genes, <10% mitochondria)
+def pp(h5ad_path):
+    # Read the .h5ad file into an AnnData object
+    adata = sc.read(h5ad_path)
+    
+    # Make variable names unique
+    adata.var_names_make_unique()
+
+    # 1. Annotate mitochondrial genes
+    adata.var['mt'] = adata.var_names.str.upper().str.startswith('MT-')  # or 'mt-' depending on naming
+
+    # 2. Calculate QC metrics
+    sc.pp.calculate_qc_metrics(adata, qc_vars=['mt'], percent_top=None, log1p=False, inplace=True)
+
+    # 3. Filter cells based on the given thresholds
+    adata = adata[
+        (adata.obs['total_counts'] >= 500) & 
+        (adata.obs['n_genes_by_counts'] >= 100) & 
+        (adata.obs['pct_counts_mt'] <= 10)
+    ].copy()
+
+    return adata
+
+#create an output for appended file
+out = []
+for file in os.listdir('GeneAnnotated/'):
+    out.append(pp('GeneAnnotated/' + file))
+
+adata = sc.concat(out)
+
+adata.write_h5ad('All.h5ad')
 
