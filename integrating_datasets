@@ -32,3 +32,5 @@ adata = sc.concat(out)
 
 adata.write_h5ad('All.h5ad')
 
+#Quality Info (by averaging n_genes_by_counts, total_counts, total_counts_mt, pct_mt)
+adata.obs.groupby('Sample')['n_genes_by_counts', 'total_counts', 'total_counts_mt', 'pct_mt'].mean()
