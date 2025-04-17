@@ -1,1 +1,138 @@
+#Importing modules
+import scanpy as sc
+import scvi
+import seaborn as sns
+import os
+import pandas as pd
+import numpy as np
+
+#Read the data in adata mode
+adata = sc.read_h5ad('AllRealClean.h5ad')
+adata
+
+#Adding 'counts' layer
+adata.layers['counts'] = adata.X.copy()
+
+#Generalized the sample label (treatment based)
+# Create a new column 'GSample' based on the content of 'Sample'
+adata.obs['GSample'] = np.where(
+    adata.obs['Sample'].str.contains('Nor', case=False, na=False),
+    'Normal',
+    np.where(
+        adata.obs['Sample'].str.contains('Psor', case=False, na=False),
+        'Psor',
+        'Unknown'  # fallback value if neither 'Nor' nor 'Psor' is found
+    )
+)
+adata.obs
+
+#remove low quality cells (optional depends whether the rawdata has been cleaned or not)
+sc.pp.filter_cells(adata, min_genes=200)
+#keep high quality cells (95% containing most genes, not transcripts)
+upper_lim = np.quantile(adata.obs.n_genes_by_counts.values, .95)
+adata = adata[adata.obs.n_genes_by_counts < upper_lim]
+
+#Normalization
+sc.pp.normalize_total(adata, target_sum = 1e4)
+sc.pp.log1p(adata)
+adata.raw = adata
+adata
+
+#Training model for clustering (need to do in the initial step, takes long time, so save the model when it is good enough, then load model for the next time)
+#Model's parameter definition
+scvi.model.SCVI.setup_anndata(adata, layer = "counts",
+                              categorical_covariate_keys = ["Sample"],
+                              continuous_covariate_keys = ['pct_counts_mt', 'total_counts'])
+#train the model
+from ipywidgets import IntProgress #display progress bar
+from IPython.display import display #display progress bar
+# Initialize model
+model = scvi.model.SCVI(adata)
+model.train()
+
+#save model
+model.save('model.model/')
+
+#load model
+from scvi.model import SCVI
+model = SCVI.load("model.model/", adata)  # pass your AnnData object
+
+#create a latent representation
+adata.obsm['X_scVI'] = model.get_latent_representation()
+model.get_normalized_expression(library_size=1e4)
+adata.layers['scvi_normalized'] = model.get_normalized_expression(library_size = 1e4)
+
+#define neighbors
+sc.pp.neighbors(adata, use_rep = 'X_scVI')
+
+#Clustering
+sc.tl.umap(adata)
+sc.tl.leiden(adata, resolution = 0.1)
+sc.pl.umap(adata, color = ["leiden", "GSample"], frameon = True)
+
+#Define marker genes for cell type annotation
+marker_genes = {
+    "Keratinocyte": ["KRT14", "KRT1", "DMKN", "KRT10", "KRT5", "KRTDAP"],
+    "Melanocyte": ["DCT", "TYRP1", "PMEL", "MLANA", "QPCT", "MITF"],
+    "Eccrine gland": ["SCGB1D2", "PIP", "SCGB1B2P", "SCGB2A2", "MUCL1", "DCD"],
+    "Endothelial Cells": ["CLDN5", "FABP4", "PECAM1", "CDH5", "TM4SF1", "CCL21"],
+    "Fibroblast": ["DCN", "COL1A1", "CFD", "COL1A2", "COL3A1", "APOD"],
+    "Smooth Muscle": ["TAGLN", "ACTA2", "MYL9", "RGS5", "TPM2", "CALD1"],
+    "Nerve Cell": ["MPZ", "PLP1", "S100B", "PMP22", "CRYAB", "MBP"],
+    "T Cell": ["IL32", "CD52", "CXCR4", "CD3E", "CD3D", "TRAC"],
+    
+    "Myeloid Cell": [
+        "HLA-DRA",
+        "HLA-DPB1",
+        "CD74",
+        "LYZ",
+        "HLA-DPA1",
+        "HLA-DRB1"
+    ],
+    "Mast cells": ["TPSAB1", "CPA3", "CTSG", "HPGD", "HPGDS"]
+}
+
+#Create dotplot to visualize and validate markers based- cell types
+import matplotlib.pyplot as plt
+
+# Set matplotlib font to Arial
+plt.rcParams['font.family'] = 'Arial'
+
+# Sets global font size for Scanpy plots
+sc.set_figure_params(scanpy=True, fontsize=16)
+
+#create the plot
+sc.pl.dotplot(adata, marker_genes, groupby="leiden", standard_scale="var")
+
+#Assign cell types label to the cluster plot
+cell_type = {"0": "Keratinocyte-2",
+             "1": "Keratinocyte-3",
+             "2": "Keratinocyte-1",
+             "3": "Fibroblast",
+             "4": "T Cell",
+             "5": "Endothelial Cell",
+             "6": "Smooth Muscle",
+             "7": "Melanocyte and Nerve Cell",
+             "8": "Myeloid Cell",
+             "9": "Mast Cell",
+             "10": "Eccrine Gland"}
+adata.obs['cell_type'] = adata.obs.leiden.map(cell_type)
+
+#Create a new clustering with cell type annotation
+# Set matplotlib font to Arial
+plt.rcParams['font.family'] = 'Arial'
+
+# Sets global font size for Scanpy plots
+sc.set_figure_params(scanpy=True, fontsize=9, figsize = (5.3,4))
+
+sc.pl.umap(adata, color = ['cell_type'], frameon = True, legend_loc = "on data")
+
+#Check clustering DEGs
+vmin = 0  # Minimum expression value (for example, setting to zero if you want no lower bound)
+vmax = 5  # Maximum expression value (or set to the highest observed expression value)
+
+sc.pl.umap(adata, color = ['CSF3'], layer = 'scvi_normalized', cmap ='plasma', vmin=vmin, vmax=vmax)
+
+plt.savefig("CSF3.png", dpi=300)  # Now set dpi here
+plt.show()  # Display the plot
 
