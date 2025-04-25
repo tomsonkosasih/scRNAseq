@@ -58,6 +58,7 @@ from scvi.model import SCVI
 model = SCVI.load("model.model/", adata)  # pass your AnnData object
 
 #create a latent representation
+#latent representation is a combinatorial of several variables representing the final cumulative "latent variables" https://www.sciencedirect.com/science/article/pii/S2666389921000015#fig1
 adata.obsm['X_scVI'] = model.get_latent_representation()
 model.get_normalized_expression(library_size=1e4)
 adata.layers['scvi_normalized'] = model.get_normalized_expression(library_size = 1e4)
